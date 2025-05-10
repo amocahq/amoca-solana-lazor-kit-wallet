@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWallet } from '@lazorkit/wallet';
-import { Wallet, Wallet as WalletX } from 'lucide-react';
+import { Wallet, Wallet as WalletX, RefreshCw } from 'lucide-react';
 import Button from './ui/Button';
+import { connection, USDC_MINT } from '../utils/solana';
+import { PublicKey } from '@solana/web3.js';
+import { getAssociatedTokenAddress } from '@solana/spl-token';
 
 const WalletConnect: React.FC = () => {
   const {
@@ -12,6 +15,46 @@ const WalletConnect: React.FC = () => {
     connect,
     disconnect
   } = useWallet();
+
+  const [solBalance, setSolBalance] = useState<number | null>(null);
+  const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+
+  const fetchBalances = async () => {
+    if (!smartWalletAuthorityPubkey) return;
+    
+    try {
+      setIsLoadingBalance(true);
+      
+      // Fetch SOL balance
+      const publicKey = new PublicKey(smartWalletAuthorityPubkey);
+      const balance = await connection.getBalance(publicKey);
+      setSolBalance(balance / 1_000_000_000); // Convert lamports to SOL
+      
+      // Fetch USDC balance
+      try {
+        const tokenAccount = await getAssociatedTokenAddress(USDC_MINT, publicKey);
+        const tokenBalance = await connection.getTokenAccountBalance(tokenAccount);
+        setUsdcBalance(Number(tokenBalance.value.uiAmount));
+      } catch (err) {
+        console.log("No USDC account found or other error", err);
+        setUsdcBalance(0);
+      }
+    } catch (err) {
+      console.error('Error fetching balances:', err);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isConnected && smartWalletAuthorityPubkey) {
+      fetchBalances();
+    } else {
+      setSolBalance(null);
+      setUsdcBalance(null);
+    }
+  }, [isConnected, smartWalletAuthorityPubkey]);
 
   const handleConnect = async () => {
     try {
@@ -38,20 +81,57 @@ const WalletConnect: React.FC = () => {
   return (
     <div className="relative">
       {isConnected ? (
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-600">
-            {smartWalletAuthorityPubkey?.slice(0, 4)}...
-            {smartWalletAuthorityPubkey?.slice(-4)}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDisconnect}
-            className="flex items-center gap-2"
+        <div className="flex flex-col gap-2 p-3 border rounded-md bg-white shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-purple-600" />
+              <span className="font-medium text-gray-800">
+                {smartWalletAuthorityPubkey?.slice(0, 6)}...
+                {smartWalletAuthorityPubkey?.slice(-4)}
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDisconnect}
+              className="h-8 px-3"
+            >
+              <WalletX className="w-3 h-3 mr-1" />
+              Disconnect
+            </Button>
+          </div>
+          
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">SOL:</span>
+              <div className="flex items-center">
+                {isLoadingBalance ? (
+                  <span className="text-gray-400">Loading...</span>
+                ) : (
+                  <span className="font-medium">{solBalance !== null ? solBalance.toFixed(4) : '0'}</span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">USDC:</span>
+              <div className="flex items-center">
+                {isLoadingBalance ? (
+                  <span className="text-gray-400">Loading...</span>
+                ) : (
+                  <span className="font-medium">{usdcBalance !== null ? usdcBalance.toFixed(2) : '0'}</span>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <button 
+            onClick={fetchBalances} 
+            disabled={isLoadingBalance}
+            className="mt-1 text-xs flex items-center justify-center text-purple-600 hover:text-purple-800"
           >
-            <WalletX className="w-4 h-4" />
-            Disconnect
-          </Button>
+            <RefreshCw className={`w-3 h-3 mr-1 ${isLoadingBalance ? 'animate-spin' : ''}`} />
+            Refresh Balances
+          </button>
         </div>
       ) : (
         <Button
