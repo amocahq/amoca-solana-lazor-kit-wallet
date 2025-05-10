@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@lazorkit/wallet": "^0.9.7",
     "@solana/spl-token": "^0.3.11",
     "buffer": "^6.0.3",
     "lucide-react": "^0.363.0",
