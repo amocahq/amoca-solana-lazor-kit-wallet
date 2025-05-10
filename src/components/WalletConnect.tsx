@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@lazorkit/wallet';
-import { Wallet, Wallet as WalletX, RefreshCw, Copy, Check, ChevronDown, AlertCircle } from 'lucide-react';
+import { Wallet, Wallet as WalletX, RefreshCw, Copy, Check, ChevronDown, AlertCircle, Key, Loader2 } from 'lucide-react';
 import Button from './ui/Button';
 import { connection, USDC_MINT } from '../utils/solana';
 import { PublicKey } from '@solana/web3.js';
@@ -23,6 +23,7 @@ const WalletConnect: React.FC = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [existingWallet, setExistingWallet] = useState<boolean | null>(null);
   const [checkingWallet, setCheckingWallet] = useState(false);
+  const [isExportingKey, setIsExportingKey] = useState(false);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -155,6 +156,46 @@ const WalletConnect: React.FC = () => {
     }
   };
 
+  const handleExportPrivateKey = async () => {
+    if (!smartWalletAuthorityPubkey) return;
+    
+    setIsExportingKey(true);
+    try {
+      // This is a placeholder for the actual export implementation
+      // The exact method will depend on how @lazorkit/wallet handles private key access
+      // In a real implementation, this should include additional security checks,
+      // like password confirmation, etc.
+      
+      // Sample implementation (modify according to the SDK's actual API):
+      // const privateKey = await walletSDK.exportPrivateKey(password);
+      
+      // For demonstration purposes, we'll simulate a delay and show a placeholder key
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // In a real app, never log the private key to console
+      // This is just for demonstration purposes
+      console.log('Export private key requested');
+      
+      // Simulate retrieving a private key (in reality, this would come from the SDK)
+      const simulatedPrivateKey = "xyzExamplePrivateKeyAbc123...";
+      
+      // Show private key in a secure dialog or download as encrypted file
+      const confirmed = window.confirm(
+        "WARNING: Your private key is sensitive information!\n\n" +
+        "Never share it with anyone. Anyone with your private key has full control of your wallet.\n\n" +
+        "For demonstration purposes only, here is a simulated private key:\n" +
+        simulatedPrivateKey + "\n\n" +
+        "In a real application, you would securely export this to an encrypted file."
+      );
+      
+    } catch (error) {
+      console.error('Failed to export private key:', error);
+      alert('Failed to export private key. Please try again.');
+    } finally {
+      setIsExportingKey(false);
+    }
+  };
+
   // Function to get appropriate button text based on wallet status
   const getConnectButtonText = () => {
     if (isLoading || checkingWallet) return 'Connecting...';
@@ -239,15 +280,32 @@ const WalletConnect: React.FC = () => {
               </button>
               
               <div className="mt-3 pt-2 border-t">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDisconnect}
-                  className="w-full h-8 justify-center text-sm"
-                >
-                  <WalletX className="w-3 h-3 mr-1" />
-                  Disconnect
-                </Button>
+                <div className="flex flex-col space-y-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportPrivateKey}
+                    disabled={isExportingKey}
+                    className="w-full h-8 justify-center text-sm bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                  >
+                    {isExportingKey ? (
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    ) : (
+                      <Key className="w-3 h-3 mr-1" />
+                    )}
+                    {isExportingKey ? 'Exporting...' : 'Export Private Key'}
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDisconnect}
+                    className="w-full h-8 justify-center text-sm"
+                  >
+                    <WalletX className="w-3 h-3 mr-1" />
+                    Disconnect
+                  </Button>
+                </div>
               </div>
             </div>
           )}
