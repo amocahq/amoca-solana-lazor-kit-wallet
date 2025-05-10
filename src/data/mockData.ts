@@ -128,7 +128,7 @@ export const mockEducationalResources: EducationalResource[] = [
   {
     id: '2',
     title: 'Understanding Carbon Markets',
-    description: 'Dive into how carbon credits work and why they're important in the fight against climate change.',
+    description: 'Dive into how carbon credits work and why they&apos;re important in the fight against climate change.',
     type: 'article',
     imageUrl: 'https://images.pexels.com/photos/4385291/pexels-photo-4385291.jpeg',
     readTime: 15,
