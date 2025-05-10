@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@lazorkit/wallet';
-import { Wallet, Wallet as WalletX, RefreshCw, Copy, Check, ChevronDown, AlertCircle, Key, Loader2 } from 'lucide-react';
+import { Wallet, Wallet as WalletX, RefreshCw, Copy, Check, ChevronDown, AlertCircle, Key, Loader2, Download } from 'lucide-react';
 import Button from './ui/Button';
 import { connection, USDC_MINT } from '../utils/solana';
 import { PublicKey } from '@solana/web3.js';
@@ -24,6 +24,9 @@ const WalletConnect: React.FC = () => {
   const [existingWallet, setExistingWallet] = useState<boolean | null>(null);
   const [checkingWallet, setCheckingWallet] = useState(false);
   const [isExportingKey, setIsExportingKey] = useState(false);
+  const [keyActionComplete, setKeyActionComplete] = useState(false);
+  const [isAirdropping, setIsAirdropping] = useState(false);
+  const [airdropSuccess, setAirdropSuccess] = useState(false);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -156,43 +159,85 @@ const WalletConnect: React.FC = () => {
     }
   };
 
-  const handleExportPrivateKey = async () => {
+  const handleCopyPrivateKey = async () => {
     if (!smartWalletAuthorityPubkey) return;
     
     setIsExportingKey(true);
+    setKeyActionComplete(false);
     try {
-      // This is a placeholder for the actual export implementation
+      // Confirm the user understands the security implications
+      const confirmed = window.confirm(
+        "WARNING: Your private key is sensitive information!\n\n" +
+        "Never share it with anyone. Anyone with your private key has full control of your wallet.\n\n" +
+        "Are you sure you want to copy your private key to the clipboard?"
+      );
+      
+      if (!confirmed) {
+        return;
+      }
+      
+      // This is a placeholder for the actual implementation
       // The exact method will depend on how @lazorkit/wallet handles private key access
-      // In a real implementation, this should include additional security checks,
-      // like password confirmation, etc.
       
-      // Sample implementation (modify according to the SDK's actual API):
-      // const privateKey = await walletSDK.exportPrivateKey(password);
-      
-      // For demonstration purposes, we'll simulate a delay and show a placeholder key
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // In a real app, never log the private key to console
-      // This is just for demonstration purposes
-      console.log('Export private key requested');
+      // For demonstration purposes, we'll simulate a delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Simulate retrieving a private key (in reality, this would come from the SDK)
       const simulatedPrivateKey = "xyzExamplePrivateKeyAbc123...";
       
-      // Show private key in a secure dialog or download as encrypted file
-      const confirmed = window.confirm(
-        "WARNING: Your private key is sensitive information!\n\n" +
-        "Never share it with anyone. Anyone with your private key has full control of your wallet.\n\n" +
-        "For demonstration purposes only, here is a simulated private key:\n" +
-        simulatedPrivateKey + "\n\n" +
-        "In a real application, you would securely export this to an encrypted file."
-      );
+      // Copy to clipboard
+      await navigator.clipboard.writeText(simulatedPrivateKey);
+      
+      // Set success state
+      setKeyActionComplete(true);
+      
+      // Reset success state after 3 seconds
+      setTimeout(() => {
+        setKeyActionComplete(false);
+      }, 3000);
       
     } catch (error) {
-      console.error('Failed to export private key:', error);
-      alert('Failed to export private key. Please try again.');
+      console.error('Failed to copy private key:', error);
+      alert('Failed to copy private key. Please try again.');
     } finally {
       setIsExportingKey(false);
+    }
+  };
+
+  const handleAirdropSol = async () => {
+    if (!smartWalletAuthorityPubkey) return;
+    
+    setIsAirdropping(true);
+    setAirdropSuccess(false);
+    
+    try {
+      const publicKey = new PublicKey(smartWalletAuthorityPubkey);
+      
+      // Request 1 SOL airdrop (1 SOL = 1,000,000,000 lamports)
+      const signature = await connection.requestAirdrop(
+        publicKey,
+        1_000_000_000
+      );
+      
+      // Wait for confirmation
+      await connection.confirmTransaction(signature);
+      
+      // Refresh balances
+      await fetchBalances();
+      
+      // Set success state
+      setAirdropSuccess(true);
+      
+      // Reset success state after 3 seconds
+      setTimeout(() => {
+        setAirdropSuccess(false);
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Airdrop failed:', error);
+      alert('Failed to airdrop SOL. Please try again later.');
+    } finally {
+      setIsAirdropping(false);
     }
   };
 
@@ -270,30 +315,69 @@ const WalletConnect: React.FC = () => {
                 </div>
               </div>
               
-              <button 
-                onClick={fetchBalances} 
-                disabled={isLoadingBalance}
-                className="mt-1 text-xs flex items-center justify-center text-purple-600 hover:text-purple-800"
-              >
-                <RefreshCw className={`w-3 h-3 mr-1 ${isLoadingBalance ? 'animate-spin' : ''}`} />
-                Refresh Balances
-              </button>
+              <div className="mt-2 flex gap-2 justify-between items-center">
+                <button 
+                  onClick={fetchBalances} 
+                  disabled={isLoadingBalance}
+                  className="text-xs flex items-center justify-center text-purple-600 hover:text-purple-800"
+                >
+                  <RefreshCw className={`w-3 h-3 mr-1 ${isLoadingBalance ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+                
+                <button
+                  onClick={handleAirdropSol}
+                  disabled={isAirdropping}
+                  className={`text-xs flex items-center justify-center px-2 py-1 rounded ${
+                    airdropSuccess 
+                      ? "bg-green-100 text-green-700" 
+                      : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                  } transition-colors`}
+                >
+                  {isAirdropping ? (
+                    <>
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      <span>Airdropping...</span>
+                    </>
+                  ) : airdropSuccess ? (
+                    <>
+                      <Check className="w-3 h-3 mr-1" />
+                      <span>Airdrop Received!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3 h-3 mr-1" />
+                      <span>Airdrop 1 SOL</span>
+                    </>
+                  )}
+                </button>
+              </div>
               
               <div className="mt-3 pt-2 border-t">
                 <div className="flex flex-col space-y-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleExportPrivateKey}
+                    onClick={handleCopyPrivateKey}
                     disabled={isExportingKey}
-                    className="w-full h-8 justify-center text-sm bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                    className={`w-full h-8 justify-center text-sm ${
+                      keyActionComplete 
+                        ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100" 
+                        : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                    }`}
                   >
                     {isExportingKey ? (
                       <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    ) : keyActionComplete ? (
+                      <Check className="w-3 h-3 mr-1" />
                     ) : (
                       <Key className="w-3 h-3 mr-1" />
                     )}
-                    {isExportingKey ? 'Exporting...' : 'Export Private Key'}
+                    {isExportingKey 
+                      ? 'Copying...' 
+                      : keyActionComplete 
+                        ? 'Copied to Clipboard!' 
+                        : 'Copy Private Key'}
                   </Button>
                   
                   <Button
