@@ -1,27 +1,56 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useWallet } from '@lazorkit/wallet';
-import { Leaf } from 'lucide-react';
+import { Leaf, Loader2 } from 'lucide-react';
+import { PublicKey } from '@solana/web3.js';
 import Card from './ui/Card';
 import Badge from './ui/Badge';
 import Button from './ui/Button';
 import { Project } from '../types';
 import { formatCurrency, formatNumber } from '../utils/formatters';
+import { createSolanaTransaction, connection } from '../utils/solana';
 
 interface ProjectCardProps {
   project: Project;
-  onInvest: (amount: number) => Promise<void>;
 }
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project, onInvest }) => {
-  const { isConnected } = useWallet();
+const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
+  const { isConnected, smartWalletAuthorityPubkey, signTransaction } = useWallet();
+  const [isInvesting, setIsInvesting] = useState(false);
   const progress = (project.currentFunding / project.fundingGoal) * 100;
 
   const handleInvest = async () => {
+    if (!smartWalletAuthorityPubkey) return;
+    
+    setIsInvesting(true);
     try {
-      // For demo purposes, we'll invest a fixed amount of 1 SOL
-      await onInvest(1);
+      // Project wallet address (replace with actual project wallet)
+      const projectWallet = new PublicKey('11111111111111111111111111111111');
+      
+      const transaction = await createSolanaTransaction(
+        new PublicKey(smartWalletAuthorityPubkey),
+        projectWallet,
+        1, // 1 SOL
+        true // isSol
+      );
+
+      // Get the latest blockhash
+      const { blockhash } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = new PublicKey(smartWalletAuthorityPubkey);
+
+      const signature = await signTransaction(transaction);
+      console.log('Transaction signed:', signature);
+      
+      // Send the signed transaction
+      const txid = await connection.sendRawTransaction(transaction.serialize());
+      await connection.confirmTransaction(txid);
+      
+      alert('Investment successful! Transaction ID: ' + txid);
     } catch (error) {
       console.error('Investment failed:', error);
+      alert('Investment failed. Please try again.');
+    } finally {
+      setIsInvesting(false);
     }
   };
 
@@ -90,11 +119,19 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onInvest }) => {
           variant="primary"
           fullWidth
           onClick={handleInvest}
-          disabled={!isConnected}
+          disabled={!isConnected || isInvesting}
           className="flex items-center justify-center gap-2"
         >
-          <Leaf className="w-4 h-4" />
-          {isConnected ? 'Invest 1 SOL' : 'Connect Wallet to Invest'}
+          {isInvesting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Leaf className="w-4 h-4" />
+          )}
+          {!isConnected 
+            ? 'Connect Wallet to Invest'
+            : isInvesting 
+            ? 'Investing...' 
+            : 'Invest 1 SOL'}
         </Button>
       </div>
     </Card>
