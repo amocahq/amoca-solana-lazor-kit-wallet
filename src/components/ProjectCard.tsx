@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWallet } from '@lazorkit/wallet';
-import { Leaf, Loader2 } from 'lucide-react';
+import { Leaf, Loader2, AlertTriangle } from 'lucide-react';
 import { PublicKey } from '@solana/web3.js';
 import Card from './ui/Card';
 import Badge from './ui/Badge';
@@ -14,12 +14,54 @@ interface ProjectCardProps {
 }
 
 const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
-  const { isConnected, smartWalletAuthorityPubkey, signTransaction } = useWallet();
+  const { isConnected, smartWalletAuthorityPubkey, signTransaction, connect } = useWallet();
   const [isInvesting, setIsInvesting] = useState(false);
+  const [walletChecked, setWalletChecked] = useState(false);
+  const [walletStatus, setWalletStatus] = useState<string | null>(null);
   const progress = (project.currentFunding / project.fundingGoal) * 100;
 
+  // Check if user has an existing wallet when component mounts
+  useEffect(() => {
+    const checkExistingWallet = async () => {
+      try {
+        // Use the LazorKit wallet API to check if a wallet already exists
+        // This depends on the specific API methods available in @lazorkit/wallet
+        const hasExistingWallet = await window.navigator.credentials
+          .get({ publicKey: { challenge: new Uint8Array([1]) } })
+          .then(() => true)
+          .catch(() => false);
+
+        if (hasExistingWallet) {
+          setWalletStatus("Existing wallet found");
+        } else {
+          setWalletStatus(null);
+        }
+      } catch (error) {
+        console.error("Error checking for existing wallet:", error);
+      } finally {
+        setWalletChecked(true);
+      }
+    };
+
+    if (!isConnected) {
+      checkExistingWallet();
+    }
+  }, [isConnected]);
+
   const handleInvest = async () => {
-    if (!smartWalletAuthorityPubkey) return;
+    if (!smartWalletAuthorityPubkey) {
+      // If wallet is not connected, try to connect first
+      if (!isConnected) {
+        try {
+          await connect();
+          return; // Exit function after connecting - user can click invest again
+        } catch (error) {
+          console.error("Failed to connect wallet:", error);
+          return;
+        }
+      }
+      return;
+    }
     
     setIsInvesting(true);
     try {
@@ -53,6 +95,31 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
       setIsInvesting(false);
     }
   };
+
+  // Define the button text and disabled state based on wallet status
+  const getButtonConfig = () => {
+    if (isConnected) {
+      return {
+        text: isInvesting ? 'Investing...' : 'Invest 1 SOL',
+        disabled: isInvesting,
+        icon: isInvesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Leaf className="w-4 h-4" />
+      };
+    } else if (walletStatus) {
+      return {
+        text: 'Connect Existing Wallet',
+        disabled: false,
+        icon: <Leaf className="w-4 h-4" />
+      };
+    } else {
+      return {
+        text: 'Connect Wallet to Invest',
+        disabled: !walletChecked,
+        icon: <Leaf className="w-4 h-4" />
+      };
+    }
+  };
+
+  const buttonConfig = getButtonConfig();
 
   return (
     <Card className="p-6">
@@ -119,20 +186,19 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
           variant="primary"
           fullWidth
           onClick={handleInvest}
-          disabled={!isConnected || isInvesting}
+          disabled={buttonConfig.disabled}
           className="flex items-center justify-center gap-2"
         >
-          {isInvesting ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Leaf className="w-4 h-4" />
-          )}
-          {!isConnected 
-            ? 'Connect Wallet to Invest'
-            : isInvesting 
-            ? 'Investing...' 
-            : 'Invest 1 SOL'}
+          {buttonConfig.icon}
+          {buttonConfig.text}
         </Button>
+
+        {walletStatus && !isConnected && (
+          <div className="flex items-center justify-center gap-1 text-xs text-amber-600">
+            <AlertTriangle className="w-3 h-3" />
+            <span>{walletStatus}</span>
+          </div>
+        )}
       </div>
     </Card>
   );
