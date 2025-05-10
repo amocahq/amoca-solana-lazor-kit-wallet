@@ -55,7 +55,7 @@ const WalletConnect: React.FC = () => {
   const checkForExistingWallet = async () => {
     try {
       setCheckingWallet(true);
-      
+
       // First check for local device passkeys
       const hasLocalCredentials = await window.navigator.credentials
         .get({
@@ -70,10 +70,10 @@ const WalletConnect: React.FC = () => {
         })
         .then(cred => !!cred)
         .catch(() => false);
-      
+
       setLocalPasskeyAvailable(hasLocalCredentials);
-      
-      // If no local passkey found, check if any passkey exists
+
+      // If no local passkey found, check if any passkey exists (other device)
       if (!hasLocalCredentials) {
         const hasAnyCredentials = await window.navigator.credentials
           .get({
@@ -87,7 +87,7 @@ const WalletConnect: React.FC = () => {
           })
           .then(cred => !!cred)
           .catch(() => false);
-        
+
         setExistingWallet(hasAnyCredentials);
       } else {
         setExistingWallet(true);
@@ -137,18 +137,42 @@ const WalletConnect: React.FC = () => {
     }
   }, [isConnected, smartWalletAuthorityPubkey]);
 
+  // Connect using local passkey if available, otherwise try any passkey (other device)
   const handleConnect = async () => {
     try {
       setCheckingWallet(true);
-      // First try to connect using local device passkey
-      await connect({ 
-        useExistingCredentials: true,
-        preferLocalDevice: true 
-      });
+      if (localPasskeyAvailable) {
+        // Prefer local device
+        await connect({
+          useExistingCredentials: true,
+          preferLocalDevice: true
+        });
+      } else {
+        // No local passkey, try any available (other device)
+        await connect({
+          useExistingCredentials: true,
+          preferLocalDevice: false
+        });
+      }
     } catch (err) {
-      console.error('Failed to connect with local passkey:', err);
+      console.error('Failed to connect:', err);
     } finally {
       setCheckingWallet(false);
+    }
+  };
+
+  // Only for explicit "other device" button
+  const handleConnectOtherDevice = async () => {
+    try {
+      setCheckingOtherDevices(true);
+      await connect({
+        useExistingCredentials: true,
+        preferLocalDevice: false
+      });
+    } catch (err) {
+      console.error('Failed to connect with passkey from another device:', err);
+    } finally {
+      setCheckingOtherDevices(false);
     }
   };
 
@@ -370,7 +394,11 @@ const WalletConnect: React.FC = () => {
               className="flex items-center gap-2"
             >
               <Wallet className="w-4 h-4" />
-              {isLoading || checkingWallet ? 'Connecting...' : 'Connect Existing Wallet'}
+              {isLoading || checkingWallet
+                ? 'Connecting...'
+                : localPasskeyAvailable
+                  ? 'Connect with Local Passkey'
+                  : 'Connect Existing Wallet'}
             </Button>
           )}
           
@@ -385,6 +413,7 @@ const WalletConnect: React.FC = () => {
             {isLoading || checkingWallet ? 'Creating...' : 'Create New Wallet'}
           </Button>
           
+          {/* Only show "Use passkey from another device" if no local passkey */}
           {existingWallet && !localPasskeyAvailable && !isConnected && !isLoading && (
             <button 
               onClick={handleConnectOtherDevice}
