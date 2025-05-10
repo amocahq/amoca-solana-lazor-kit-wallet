@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@lazorkit/wallet';
-import { Wallet, Wallet as WalletX, RefreshCw, Copy, Check, ChevronDown, AlertCircle, Key, Loader2, Download } from 'lucide-react';
+import { Wallet, Wallet as WalletX, RefreshCw, Copy, Check, ChevronDown, AlertCircle, Key, Loader2, Download, Smartphone } from 'lucide-react';
 import Button from './ui/Button';
 import { connection, USDC_MINT } from '../utils/solana';
 import { PublicKey } from '@solana/web3.js';
@@ -22,7 +22,9 @@ const WalletConnect: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [existingWallet, setExistingWallet] = useState<boolean | null>(null);
+  const [localPasskeyAvailable, setLocalPasskeyAvailable] = useState<boolean | null>(null);
   const [checkingWallet, setCheckingWallet] = useState(false);
+  const [checkingOtherDevices, setCheckingOtherDevices] = useState(false);
   const [isExportingKey, setIsExportingKey] = useState(false);
   const [keyActionComplete, setKeyActionComplete] = useState(false);
   const [isAirdropping, setIsAirdropping] = useState(false);
@@ -56,28 +58,46 @@ const WalletConnect: React.FC = () => {
     try {
       setCheckingWallet(true);
       
-      // This is a simplified check - the specific implementation will depend on how
-      // @lazorkit/wallet handles credential storage
-      // You may need to use a specific method provided by the SDK
-      
-      // Try to get credential info if it exists
-      const hasCredentials = await window.navigator.credentials
+      // First check for local device passkeys
+      const hasLocalCredentials = await window.navigator.credentials
         .get({
           mediation: 'optional',
           publicKey: {
             challenge: new Uint8Array([0, 1, 2, 3]),
             timeout: 60000,
             userVerification: 'preferred',
-            rpId: window.location.hostname
+            rpId: window.location.hostname,
+            authenticatorAttachment: 'platform' // Specifically check for platform authenticators (local device)
           }
         })
         .then(cred => !!cred)
         .catch(() => false);
       
-      setExistingWallet(hasCredentials);
+      setLocalPasskeyAvailable(hasLocalCredentials);
+      
+      // If no local passkey found, check if any passkey exists
+      if (!hasLocalCredentials) {
+        const hasAnyCredentials = await window.navigator.credentials
+          .get({
+            mediation: 'optional',
+            publicKey: {
+              challenge: new Uint8Array([0, 1, 2, 3]),
+              timeout: 60000,
+              userVerification: 'preferred',
+              rpId: window.location.hostname
+            }
+          })
+          .then(cred => !!cred)
+          .catch(() => false);
+        
+        setExistingWallet(hasAnyCredentials);
+      } else {
+        setExistingWallet(true);
+      }
     } catch (error) {
       console.error('Error checking for existing wallet:', error);
       setExistingWallet(false);
+      setLocalPasskeyAvailable(false);
     } finally {
       setCheckingWallet(false);
     }
@@ -122,14 +142,30 @@ const WalletConnect: React.FC = () => {
   const handleConnect = async () => {
     try {
       setCheckingWallet(true);
-      // If we know there's an existing wallet, pass that info to connect
-      // The specific parameter will depend on the lazorkit implementation
-      // This is pseudocode - adjust to actual API
-      await connect({ useExistingCredentials: true });
+      // First try to connect using local device passkey
+      await connect({ 
+        useExistingCredentials: true,
+        preferLocalDevice: true 
+      });
     } catch (err) {
-      console.error('Failed to connect wallet:', err);
+      console.error('Failed to connect with local passkey:', err);
     } finally {
       setCheckingWallet(false);
+    }
+  };
+
+  const handleConnectOtherDevice = async () => {
+    try {
+      setCheckingOtherDevices(true);
+      // Connect using any available passkey (could be on another device)
+      await connect({ 
+        useExistingCredentials: true,
+        preferLocalDevice: false 
+      });
+    } catch (err) {
+      console.error('Failed to connect with other device passkey:', err);
+    } finally {
+      setCheckingOtherDevices(false);
     }
   };
 
@@ -244,8 +280,9 @@ const WalletConnect: React.FC = () => {
   // Function to get appropriate button text based on wallet status
   const getConnectButtonText = () => {
     if (isLoading || checkingWallet) return 'Connecting...';
-    if (existingWallet) return 'Connect Existing Wallet';
-    return 'Connect Wallet';
+    if (localPasskeyAvailable) return 'Connect with Local Passkey';
+    if (existingWallet) return 'Connect Wallet';
+    return 'Create New Wallet';
   };
 
   return (
@@ -400,12 +437,32 @@ const WalletConnect: React.FC = () => {
             variant="primary"
             size="sm"
             onClick={handleConnect}
-            disabled={isLoading || checkingWallet}
+            disabled={isLoading || checkingWallet || checkingOtherDevices}
             className="flex items-center gap-2"
           >
             <Wallet className="w-4 h-4" />
             {getConnectButtonText()}
           </Button>
+          
+          {existingWallet && !localPasskeyAvailable && !isConnected && !isLoading && (
+            <button 
+              onClick={handleConnectOtherDevice}
+              disabled={checkingOtherDevices}
+              className="mt-2 text-xs flex items-center justify-center gap-1 text-purple-600 hover:text-purple-800"
+            >
+              {checkingOtherDevices ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Looking for passkeys...</span>
+                </>
+              ) : (
+                <>
+                  <Smartphone className="w-3 h-3" />
+                  <span>Use passkey from another device</span>
+                </>
+              )}
+            </button>
+          )}
           
           {existingWallet && !isConnected && !isLoading && (
             <div className="text-xs text-purple-600 mt-1 flex items-center gap-1">
