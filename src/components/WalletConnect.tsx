@@ -23,6 +23,7 @@ const WalletConnect: React.FC = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [existingWallet, setExistingWallet] = useState<boolean | null>(null);
   const [localPasskeyAvailable, setLocalPasskeyAvailable] = useState<boolean | null>(null);
+  const [nonLocalPasskeyAvailable, setNonLocalPasskeyAvailable] = useState<boolean>(false);
   const [checkingWallet, setCheckingWallet] = useState(false);
   const [checkingOtherDevices, setCheckingOtherDevices] = useState(false);
   const [isAirdropping, setIsAirdropping] = useState(false);
@@ -55,6 +56,9 @@ const WalletConnect: React.FC = () => {
   const checkForExistingWallet = async () => {
     try {
       setCheckingWallet(true);
+      setLocalPasskeyAvailable(false); // Reset before check
+      setExistingWallet(false);       // Reset before check
+      setNonLocalPasskeyAvailable(false); // Reset before check
 
       // First check for local device passkeys
       const hasLocalCredentials = await window.navigator.credentials
@@ -72,6 +76,7 @@ const WalletConnect: React.FC = () => {
         .catch(() => false);
 
       setLocalPasskeyAvailable(hasLocalCredentials);
+      setExistingWallet(hasLocalCredentials); // existingWallet now mirrors localPasskeyAvailable
 
       // If no local passkey found, check if any passkey exists (other device)
       if (!hasLocalCredentials) {
@@ -83,19 +88,18 @@ const WalletConnect: React.FC = () => {
               timeout: 60000,
               userVerification: 'preferred',
               rpId: window.location.hostname
+              // No authenticatorAttachment, so checks all passkeys (local or other device)
             }
           })
           .then(cred => !!cred)
           .catch(() => false);
-
-        setExistingWallet(hasAnyCredentials);
-      } else {
-        setExistingWallet(true);
+        setNonLocalPasskeyAvailable(hasAnyCredentials);
       }
     } catch (error) {
       console.error('Error checking for existing wallet:', error);
       setExistingWallet(false);
       setLocalPasskeyAvailable(false);
+      setNonLocalPasskeyAvailable(false);
     } finally {
       setCheckingWallet(false);
     }
@@ -137,25 +141,18 @@ const WalletConnect: React.FC = () => {
     }
   }, [isConnected, smartWalletAuthorityPubkey]);
 
-  // Connect using local passkey if available, otherwise try any passkey (other device)
+  // Connect using local passkey if available
   const handleConnect = async () => {
     try {
       setCheckingWallet(true);
-      if (localPasskeyAvailable) {
-        // Prefer local device
-        await connect({
-          useExistingCredentials: true,
-          preferLocalDevice: true
-        });
-      } else {
-        // No local passkey, try any available (other device)
-        await connect({
-          useExistingCredentials: true,
-          preferLocalDevice: false
-        });
-      }
+      // This function is called when localPasskeyAvailable is true,
+      // so we prioritize connecting with the local device.
+      await connect({
+        useExistingCredentials: true,
+        preferLocalDevice: true 
+      });
     } catch (err) {
-      console.error('Failed to connect:', err);
+      console.error('Failed to connect with local passkey:', err);
     } finally {
       setCheckingWallet(false);
     }
@@ -251,14 +248,6 @@ const WalletConnect: React.FC = () => {
     } finally {
       setIsAirdropping(false);
     }
-  };
-
-  // Function to get appropriate button text based on wallet status
-  const getConnectButtonText = () => {
-    if (isLoading || checkingWallet) return 'Connecting...';
-    if (localPasskeyAvailable) return 'Connect with Local Passkey';
-    if (existingWallet) return 'Connect Wallet';
-    return 'Create New Wallet';
   };
 
   return (
@@ -385,7 +374,8 @@ const WalletConnect: React.FC = () => {
         </>
       ) : (
         <div className="flex flex-col gap-2">
-          {existingWallet && (
+          {/* This button appears if a local passkey is available */}
+          {existingWallet && ( 
             <Button
               variant="primary"
               size="sm"
@@ -396,14 +386,13 @@ const WalletConnect: React.FC = () => {
               <Wallet className="w-4 h-4" />
               {isLoading || checkingWallet
                 ? 'Connecting...'
-                : localPasskeyAvailable
-                  ? 'Connect with Local Passkey'
-                  : 'Connect Existing Wallet'}
+                : 'Connect with Local Passkey'
+              }
             </Button>
           )}
           
           <Button
-            variant={existingWallet ? "outline" : "primary"}
+            variant={existingWallet ? "outline" : "primary"} // Variant depends on local passkey availability
             size="sm"
             onClick={handleCreateNewWallet}
             disabled={isLoading || checkingWallet || checkingOtherDevices}
@@ -413,8 +402,8 @@ const WalletConnect: React.FC = () => {
             {isLoading || checkingWallet ? 'Creating...' : 'Create New Wallet'}
           </Button>
           
-          {/* Only show "Use passkey from another device" if no local passkey */}
-          {existingWallet && !localPasskeyAvailable && !isConnected && !isLoading && (
+          {/* Show "Use passkey from another device" if no local passkey, but other passkeys might exist */}
+          {!localPasskeyAvailable && nonLocalPasskeyAvailable && !isConnected && !isLoading && (
             <button 
               onClick={handleConnectOtherDevice}
               disabled={checkingOtherDevices}
@@ -434,10 +423,11 @@ const WalletConnect: React.FC = () => {
             </button>
           )}
           
+          {/* Message indicating local passkey detection */}
           {localPasskeyAvailable && !isConnected && !isLoading && (
             <div className="text-xs text-purple-600 mt-1 flex items-center gap-1">
               <AlertCircle className="w-3 h-3" />
-              <span>Local passkey detected</span>
+              <span>Local passkey detected. Use "Connect with Local Passkey".</span>
             </div>
           )}
         </div>
