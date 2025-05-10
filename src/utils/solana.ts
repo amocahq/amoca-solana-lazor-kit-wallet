@@ -34,7 +34,9 @@ export const createSolanaTransaction = async (
         fromTokenAccount,
         toTokenAccount,
         fromPubkey,
-        amount * 1_000_000 // Convert USDC to smallest unit (6 decimals)
+        amount * 1_000_000, // Convert USDC to smallest unit (6 decimals)
+        [],
+        TOKEN_PROGRAM_ID // Explicitly pass TOKEN_PROGRAM_ID
       )
     );
   }
