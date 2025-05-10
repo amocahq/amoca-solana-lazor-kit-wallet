@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useWallet } from '@lazorkit/wallet';
-import { Wallet, Wallet as WalletX, RefreshCw } from 'lucide-react';
+import { Wallet, Wallet as WalletX, RefreshCw, Copy, Check } from 'lucide-react';
 import Button from './ui/Button';
 import { connection, USDC_MINT } from '../utils/solana';
 import { PublicKey } from '@solana/web3.js';
@@ -19,6 +19,7 @@ const WalletConnect: React.FC = () => {
   const [solBalance, setSolBalance] = useState<number | null>(null);
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const fetchBalances = async () => {
     if (!smartWalletAuthorityPubkey) return;
@@ -78,6 +79,17 @@ const WalletConnect: React.FC = () => {
     }
   };
 
+  const copyToClipboard = () => {
+    if (smartWalletAuthorityPubkey) {
+      navigator.clipboard.writeText(smartWalletAuthorityPubkey)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch(err => console.error('Failed to copy: ', err));
+    }
+  };
+
   return (
     <div className="relative">
       {isConnected ? (
@@ -89,6 +101,16 @@ const WalletConnect: React.FC = () => {
                 {smartWalletAuthorityPubkey?.slice(0, 6)}...
                 {smartWalletAuthorityPubkey?.slice(-4)}
               </span>
+              <button 
+                onClick={copyToClipboard}
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                title="Copy full address"
+              >
+                {copied ? 
+                  <Check className="w-4 h-4 text-green-500" /> : 
+                  <Copy className="w-4 h-4 text-gray-500" />
+                }
+              </button>
             </div>
             <Button
               variant="outline"
@@ -99,6 +121,10 @@ const WalletConnect: React.FC = () => {
               <WalletX className="w-3 h-3 mr-1" />
               Disconnect
             </Button>
+          </div>
+          
+          <div className="mt-2 border-t pt-2 text-xs text-gray-500">
+            Network: <span className="font-medium text-purple-600">Devnet</span>
           </div>
           
           <div className="mt-2 space-y-1">
