@@ -25,8 +25,6 @@ const WalletConnect: React.FC = () => {
   const [localPasskeyAvailable, setLocalPasskeyAvailable] = useState<boolean | null>(null);
   const [checkingWallet, setCheckingWallet] = useState(false);
   const [checkingOtherDevices, setCheckingOtherDevices] = useState(false);
-  const [isExportingKey, setIsExportingKey] = useState(false);
-  const [keyActionComplete, setKeyActionComplete] = useState(false);
   const [isAirdropping, setIsAirdropping] = useState(false);
   const [airdropSuccess, setAirdropSuccess] = useState(false);
   
@@ -154,18 +152,17 @@ const WalletConnect: React.FC = () => {
     }
   };
 
-  const handleConnectOtherDevice = async () => {
+  const handleCreateNewWallet = async () => {
     try {
-      setCheckingOtherDevices(true);
-      // Connect using any available passkey (could be on another device)
+      setCheckingWallet(true);
+      // Create a new wallet (not using existing credentials)
       await connect({ 
-        useExistingCredentials: true,
-        preferLocalDevice: false 
+        useExistingCredentials: false
       });
     } catch (err) {
-      console.error('Failed to connect with other device passkey:', err);
+      console.error('Failed to create new wallet:', err);
     } finally {
-      setCheckingOtherDevices(false);
+      setCheckingWallet(false);
     }
   };
 
@@ -192,51 +189,6 @@ const WalletConnect: React.FC = () => {
           setTimeout(() => setCopied(false), 2000);
         })
         .catch(err => console.error('Failed to copy: ', err));
-    }
-  };
-
-  const handleCopyPrivateKey = async () => {
-    if (!smartWalletAuthorityPubkey) return;
-    
-    setIsExportingKey(true);
-    setKeyActionComplete(false);
-    try {
-      // Confirm the user understands the security implications
-      const confirmed = window.confirm(
-        "WARNING: Your private key is sensitive information!\n\n" +
-        "Never share it with anyone. Anyone with your private key has full control of your wallet.\n\n" +
-        "Are you sure you want to copy your private key to the clipboard?"
-      );
-      
-      if (!confirmed) {
-        return;
-      }
-      
-      // This is a placeholder for the actual implementation
-      // The exact method will depend on how @lazorkit/wallet handles private key access
-      
-      // For demonstration purposes, we'll simulate a delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Simulate retrieving a private key (in reality, this would come from the SDK)
-      const simulatedPrivateKey = "xyzExamplePrivateKeyAbc123...";
-      
-      // Copy to clipboard
-      await navigator.clipboard.writeText(simulatedPrivateKey);
-      
-      // Set success state
-      setKeyActionComplete(true);
-      
-      // Reset success state after 3 seconds
-      setTimeout(() => {
-        setKeyActionComplete(false);
-      }, 3000);
-      
-    } catch (error) {
-      console.error('Failed to copy private key:', error);
-      alert('Failed to copy private key. Please try again.');
-    } finally {
-      setIsExportingKey(false);
     }
   };
 
@@ -392,31 +344,7 @@ const WalletConnect: React.FC = () => {
               
               <div className="mt-3 pt-2 border-t">
                 <div className="flex flex-col space-y-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopyPrivateKey}
-                    disabled={isExportingKey}
-                    className={`w-full h-8 justify-center text-sm ${
-                      keyActionComplete 
-                        ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100" 
-                        : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
-                    }`}
-                  >
-                    {isExportingKey ? (
-                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                    ) : keyActionComplete ? (
-                      <Check className="w-3 h-3 mr-1" />
-                    ) : (
-                      <Key className="w-3 h-3 mr-1" />
-                    )}
-                    {isExportingKey 
-                      ? 'Copying...' 
-                      : keyActionComplete 
-                        ? 'Copied to Clipboard!' 
-                        : 'Copy Private Key'}
-                  </Button>
-                  
+                  {/* Remove the Copy Private Key button and keep only the Disconnect button */}
                   <Button
                     variant="outline"
                     size="sm"
@@ -432,23 +360,36 @@ const WalletConnect: React.FC = () => {
           )}
         </>
       ) : (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-2">
+          {existingWallet && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleConnect}
+              disabled={isLoading || checkingWallet || checkingOtherDevices}
+              className="flex items-center gap-2"
+            >
+              <Wallet className="w-4 h-4" />
+              {isLoading || checkingWallet ? 'Connecting...' : 'Connect Existing Wallet'}
+            </Button>
+          )}
+          
           <Button
-            variant="primary"
+            variant={existingWallet ? "outline" : "primary"}
             size="sm"
-            onClick={handleConnect}
+            onClick={handleCreateNewWallet}
             disabled={isLoading || checkingWallet || checkingOtherDevices}
             className="flex items-center gap-2"
           >
             <Wallet className="w-4 h-4" />
-            {getConnectButtonText()}
+            {isLoading || checkingWallet ? 'Creating...' : 'Create New Wallet'}
           </Button>
           
           {existingWallet && !localPasskeyAvailable && !isConnected && !isLoading && (
             <button 
               onClick={handleConnectOtherDevice}
               disabled={checkingOtherDevices}
-              className="mt-2 text-xs flex items-center justify-center gap-1 text-purple-600 hover:text-purple-800"
+              className="mt-1 text-xs flex items-center justify-center gap-1 text-purple-600 hover:text-purple-800"
             >
               {checkingOtherDevices ? (
                 <>
@@ -464,10 +405,10 @@ const WalletConnect: React.FC = () => {
             </button>
           )}
           
-          {existingWallet && !isConnected && !isLoading && (
+          {localPasskeyAvailable && !isConnected && !isLoading && (
             <div className="text-xs text-purple-600 mt-1 flex items-center gap-1">
               <AlertCircle className="w-3 h-3" />
-              <span>Using existing passkey wallet</span>
+              <span>Local passkey detected</span>
             </div>
           )}
         </div>
