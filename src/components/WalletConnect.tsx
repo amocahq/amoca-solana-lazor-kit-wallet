@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@lazorkit/wallet';
-import { Wallet, Wallet as WalletX, RefreshCw, Copy, Check, ChevronDown } from 'lucide-react';
+import { Wallet, Wallet as WalletX, RefreshCw, Copy, Check, ChevronDown, AlertCircle } from 'lucide-react';
 import Button from './ui/Button';
 import { connection, USDC_MINT } from '../utils/solana';
 import { PublicKey } from '@solana/web3.js';
@@ -21,6 +21,8 @@ const WalletConnect: React.FC = () => {
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [copied, setCopied] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [existingWallet, setExistingWallet] = useState<boolean | null>(null);
+  const [checkingWallet, setCheckingWallet] = useState(false);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -37,6 +39,45 @@ const WalletConnect: React.FC = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Check for existing wallet when component mounts
+  useEffect(() => {
+    if (!isConnected && !checkingWallet) {
+      checkForExistingWallet();
+    }
+  }, [isConnected]);
+  
+  // Function to check for existing wallet
+  const checkForExistingWallet = async () => {
+    try {
+      setCheckingWallet(true);
+      
+      // This is a simplified check - the specific implementation will depend on how
+      // @lazorkit/wallet handles credential storage
+      // You may need to use a specific method provided by the SDK
+      
+      // Try to get credential info if it exists
+      const hasCredentials = await window.navigator.credentials
+        .get({
+          mediation: 'optional',
+          publicKey: {
+            challenge: new Uint8Array([0, 1, 2, 3]),
+            timeout: 60000,
+            userVerification: 'preferred',
+            rpId: window.location.hostname
+          }
+        })
+        .then(cred => !!cred)
+        .catch(() => false);
+      
+      setExistingWallet(hasCredentials);
+    } catch (error) {
+      console.error('Error checking for existing wallet:', error);
+      setExistingWallet(false);
+    } finally {
+      setCheckingWallet(false);
+    }
+  };
 
   const fetchBalances = async () => {
     if (!smartWalletAuthorityPubkey) return;
@@ -76,9 +117,15 @@ const WalletConnect: React.FC = () => {
 
   const handleConnect = async () => {
     try {
-      await connect();
+      setCheckingWallet(true);
+      // If we know there's an existing wallet, pass that info to connect
+      // The specific parameter will depend on the lazorkit implementation
+      // This is pseudocode - adjust to actual API
+      await connect({ useExistingCredentials: true });
     } catch (err) {
       console.error('Failed to connect wallet:', err);
+    } finally {
+      setCheckingWallet(false);
     }
   };
 
@@ -106,6 +153,13 @@ const WalletConnect: React.FC = () => {
         })
         .catch(err => console.error('Failed to copy: ', err));
     }
+  };
+
+  // Function to get appropriate button text based on wallet status
+  const getConnectButtonText = () => {
+    if (isLoading || checkingWallet) return 'Connecting...';
+    if (existingWallet) return 'Connect Existing Wallet';
+    return 'Connect Wallet';
   };
 
   return (
@@ -199,16 +253,25 @@ const WalletConnect: React.FC = () => {
           )}
         </>
       ) : (
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleConnect}
-          disabled={isLoading}
-          className="flex items-center gap-2"
-        >
-          <Wallet className="w-4 h-4" />
-          {isLoading ? 'Connecting...' : 'Connect Wallet'}
-        </Button>
+        <div className="flex flex-col">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleConnect}
+            disabled={isLoading || checkingWallet}
+            className="flex items-center gap-2"
+          >
+            <Wallet className="w-4 h-4" />
+            {getConnectButtonText()}
+          </Button>
+          
+          {existingWallet && !isConnected && !isLoading && (
+            <div className="text-xs text-purple-600 mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              <span>Using existing passkey wallet</span>
+            </div>
+          )}
+        </div>
       )}
       {error && (
         <div className="absolute top-full mt-2 w-full p-2 bg-red-100 text-red-700 text-sm rounded">
