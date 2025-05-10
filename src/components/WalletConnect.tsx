@@ -25,6 +25,16 @@ const WalletConnect: React.FC = () => {
     disconnect();
   };
 
+  const handleSignMessage = async () => {
+    try {
+      const instruction = {}; // Replace with a valid TransactionInstruction
+      const txid = await signMessage(instruction);
+      console.log('Transaction ID:', txid);
+    } catch (err) {
+      console.error('Failed to sign message:', err);
+    }
+  };
+
   return (
     <div className="relative">
       {isConnected ? (
